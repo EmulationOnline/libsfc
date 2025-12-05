@@ -1,0 +1,3 @@
+[submodule "higan"]
+	path = higan
+	url = ssh://git@github.com/EmulationOnline/higan
