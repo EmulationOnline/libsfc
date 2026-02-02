@@ -156,7 +156,7 @@ int main(int argc, char **argv) {
   // Use wall-clock time (not CPU time) for frame pacing
   auto get_time_us = []() -> uint64_t {
       struct timespec ts;
-      clock_gettime(CLOCK_MONOTONIC, &ts);
+      clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
       return (uint64_t)ts.tv_sec * 1000*1000 + ts.tv_nsec / 1000;
   };
   uint64_t last = get_time_us();
@@ -176,8 +176,8 @@ int main(int argc, char **argv) {
       int hp = height();
       int fr = framerate();
       if (wp != w || hp != h | hz != fr) {
-          w = wp; 
-          h = hp; 
+          w = wp;
+          h = hp;
           hz = fr;
           snprintf(title, sizeof(title), "pico16 - %d x %d %d hz", w, h, hz);
           SDL_SetWindowTitle(window, title);
@@ -188,16 +188,17 @@ int main(int argc, char **argv) {
       SDL_UpdateTexture(texture, 0, framebuffer(), VIDEO_WIDTH*BYTES_PER_PIXEL);
       SDL_RenderCopy(renderer, texture, &srcRect, 0);
       SDL_RenderPresent(renderer);
-      uint64_t now = get_time_us();
       uint64_t delta = 1000*1000 / hz;
-      int64_t delay = (last + delta) - now;
+      uint64_t target = last + delta;
+      uint64_t now = get_time_us();
+      int64_t delay = target - now;
       // printf("delay: %ld us\n", delay);
       if (delay > 0) {
           usleep(delay);
       } else {
           puts("lagging");
       }
-      last = now;
+      last = target;  // Advance by exactly one frame period
   }
   printf("save file: %s\n", save_file);
   dump_state(save_file);
