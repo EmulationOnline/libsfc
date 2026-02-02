@@ -30,19 +30,30 @@ static void audio_queue(int16_t left, int16_t right) {
 }
 
 
+#include "bsnes/bsnes/target-libretro/libretro.h"
 bool key_state_[NUM_KEYS];
 static int16_t input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
     // todo
     if (port != 0) return 0;  // only p1 supported
     /* device ignored, only one configured */
     /* bsnes maps to libretro key, map to corelib*/
-    return 0;
-    // int key;
-    // switch (id) {
-    //     case RETRO_DEVICE_ID_JOYPAD_UP: key = Keys::BTN_Up; break;
-    //     default: return 0;
-    // }
-    // return key_state_[key];
+    int key;
+    switch (id) {
+        case RETRO_DEVICE_ID_JOYPAD_UP: key = Keys::BTN_Up; break;
+        case RETRO_DEVICE_ID_JOYPAD_DOWN: key = Keys::BTN_Down; break;
+        case RETRO_DEVICE_ID_JOYPAD_LEFT: key = Keys::BTN_Left; break;
+        case RETRO_DEVICE_ID_JOYPAD_RIGHT: key = Keys::BTN_Right; break;
+        case RETRO_DEVICE_ID_JOYPAD_A: key = Keys::BTN_A; break;
+        case RETRO_DEVICE_ID_JOYPAD_B: key = Keys::BTN_B; break;
+        case RETRO_DEVICE_ID_JOYPAD_X: key = Keys::BTN_X; break;
+        case RETRO_DEVICE_ID_JOYPAD_Y: key = Keys::BTN_Y; break;
+        case RETRO_DEVICE_ID_JOYPAD_L: key = Keys::BTN_L; break;
+        case RETRO_DEVICE_ID_JOYPAD_R: key = Keys::BTN_R; break;
+        case RETRO_DEVICE_ID_JOYPAD_START: key = Keys::BTN_Start; break;
+        case RETRO_DEVICE_ID_JOYPAD_SELECT: key = Keys::BTN_Sel; break;
+        default: return 0;
+    }
+    return key_state_[key];
 }
 
 static bool environ_cb(unsigned cmd, void* data) {
@@ -98,7 +109,9 @@ static void video_cb_impl(const void* data, unsigned width, unsigned height, siz
 extern "C" __attribute__((visibility("default")))
 void set_key(size_t key, char val) {
     REQUIRE_SYSTEM();
-    // TODO: map corelib keys to bsnes input
+    if (key >= 0 && key < sizeof key_state_) {
+        key_state_[key] = val;
+    }
 }
 
 extern "C" __attribute__((visibility("default")))
