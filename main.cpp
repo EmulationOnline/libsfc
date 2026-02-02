@@ -153,9 +153,13 @@ int main(int argc, char **argv) {
   soundcard_init(&soundcard);
   // soundcard_test();
 
-  clock_t last = clock();
-  clock_t start = clock();
-  static_assert(CLOCKS_PER_SEC == 1000*1000, "Bad clock assumptions");
+  // Use wall-clock time (not CPU time) for frame pacing
+  auto get_time_us = []() -> uint64_t {
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC, &ts);
+      return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+  };
+  uint64_t last = get_time_us();
   char title[50];
   int w=0,h=0, hz=0;
 
@@ -188,16 +192,14 @@ int main(int argc, char **argv) {
       // SDL_UpdateTexture(texture, 0, finished_frame + 2048, 512);
       // SDL_RenderCopy(renderer, texture, 0, 0);
       // SDL_RenderPresent(renderer);
-      clock_t now = clock();
-      // printf("now: %ld\n", now);
-      // printf("frame speed: %f\n", 1000.0*1000 / (now - last));
-      size_t delta = CLOCKS_PER_SEC / hz;
-      ssize_t delay = (last + delta) - now;
-      printf("delay: %d\n", delay);
+      uint64_t now = get_time_us();
+      uint64_t delta = 1000000 / hz;  // microseconds per frame
+      int64_t delay = (last + delta) - now;
+      // printf("delay: %ld us\n", delay);
       if (delay > 0) {
           usleep(delay);
       } else {
-          puts("lagging");
+          // puts("lagging");
       }
       last = now;
   }
