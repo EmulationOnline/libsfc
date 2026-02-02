@@ -1,3 +1,6 @@
 [submodule "higan"]
 	path = higan
 	url = ssh://git@github.com/EmulationOnline/higan
+[submodule "bsnes"]
+	path = bsnes
+	url = ssh://git@github.com/EmulationOnline/bsnes
