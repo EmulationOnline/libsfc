@@ -5,16 +5,14 @@ ifeq ($(CC),cc)
 CC = clang
 endif
 
+default: libsfc.so
+
 
 EMBEDFLAGS=-O3 -fvisibility=hidden -static -fPIC -lm
-# CFLAGS=-fvisibility=hidden -ffreestanding -nostdlib -fPIC -O3 -Wfatal-errors -Werror
-GBA := msfc/src/sfc/
-UTIL := msfc/src/util/
-SRCS := $(wildcard $(GBA)/*.c) $(wildcard $(GBA)/cart/*.c) $(wildcard $(GBA)/cheats/*.c) $(wildcard msfc/src/arm/*.c) $(GBA)/sio/gbp.c $(wildcard $(GBA)/renderers/*.c) $(GBA)/../gb/audio.c $(wildcard $(UTIL)/*.c) $(UTIL)/vfs/vfs-mem.c $(filter-out msfc/src/core/scripting.c, $(wildcard msfc/src/core/*.c)) $(GBA)/extra/proxy.c -x c msfc/src/core/version.c.in $(wildcard msfc/src/feature/video-*.c) msfc/src/third-party/inih/ini.c
-GBAFLAGS := --std=c2x -DHAVE_LOCALTIME_R -DPATH_MAX=4096 -Wfatal-errors -Werror -Wno-narrowing  -I msfc/include/ -I msfc/src/ 
+COREFLAGS := --std=c2x -DHAVE_LOCALTIME_R -DPATH_MAX=4096 -Wfatal-errors -Werror -Wno-narrowing  -I msfc/include/ -I msfc/src/ 
 libsfc.so: libsfc.c corelib.h
 	echo "cc: $(CC)"
-	$(CC) $(CFLAGS) $(EMBEDFLAGS) $(GBAFLAGS)  $(LDFLAGS) -shared -o libsfc.so libsfc.c $(SRCS)
+	$(CC) $(CFLAGS) $(EMBEDFLAGS) $(COREFLAGS)  $(LDFLAGS) -shared -o libsfc.so libsfc.c $(SRCS)
 	cp libsfc.so libapu.so
 	echo "libsfc done"
 
@@ -44,12 +42,30 @@ repl:
 wrepl:
 	ls Makefile libsfc.c | entr -c make libsfc.js
 
+# bsnes-based libsfc.so build
+BSNES_DIR=bsnes/bsnes
+BSNES_OBJS=$(wildcard $(BSNES_DIR)/obj/*.o)
+
+# Build bsnes object files first (reuses target-libretro build)
+bsnes-objs:
+	$(MAKE) -C $(BSNES_DIR) target=libretro
+
+# Build libsfc.so using bsnes core
+libsfc.so: bsnes-objs libsfc.c corelib.h
+	g++ -shared -fPIC -o libsfc.so libsfc.c \
+		$(filter-out $(BSNES_DIR)/obj/libretro.o, $(wildcard $(BSNES_DIR)/obj/*.o)) \
+		-I$(BSNES_DIR) -I$(BSNES_DIR)/.. \
+		-O3 -DBUILD_PERFORMANCE \
+		-fopenmp -lpthread -ldl -lX11 -lXext \
+		-Wl,--no-undefined
+	@echo "libsfc.so (bsnes) done"
+
 EMCC=~/external/emscripten/em++
 EXPORTS="['_framebuffer_bytes', '_alloc_rom', '_set_key']"
 WASMFLAGS=-Wl,--no-entry -Wl,--export-all -s EXPORTED_FUNCTIONS=$(EXPORTS) -s EXPORTED_RUNTIME_METHODS=['HEAPU8'] -DISWASM -D_POSIX_SOURCE -sALLOW_MEMORY_GROWTH #-sINITIAL_MEMORY=200mb
 .PHONY: libsfc.js
 libsfc.js:
 # $(EMCC) -Wno-div-by-zero $(GBFLAGS) libsfc.c $(SRCS) $(WASMFLAGS)
-	 $(EMCC) $(CFLAGS) $(GBAFLAGS) $(WASMFLAGS) -o libsfc.js libsfc.c $(SRCS)
+	 $(EMCC) $(CFLAGS) $(COREFLAGS) $(WASMFLAGS) -o libsfc.js libsfc.c $(SRCS)
 	# $(CC) $(CFLAGS)  -c neslib.c -o libnes_wasm.o ${WARN}
 	# $(CC) libnes_wasm.o --no-entry $(LIBFLAGS) -o $@
