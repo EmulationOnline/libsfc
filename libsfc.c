@@ -25,13 +25,24 @@ static void video_cb(const void* data, unsigned width, unsigned height, size_t p
 }
 
 static void audio_queue(int16_t left, int16_t right) {
-    int16_t mono = (left + right) / 2;
+    int16_t mono = (left/2 + right/2);
     ring_push(&ring_, &mono, 1);
 }
 
+
+bool key_state_[NUM_KEYS];
 static int16_t input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
     // todo
+    if (port != 0) return 0;  // only p1 supported
+    /* device ignored, only one configured */
+    /* bsnes maps to libretro key, map to corelib*/
     return 0;
+    // int key;
+    // switch (id) {
+    //     case RETRO_DEVICE_ID_JOYPAD_UP: key = Keys::BTN_Up; break;
+    //     default: return 0;
+    // }
+    // return key_state_[key];
 }
 
 static bool environ_cb(unsigned cmd, void* data) {
@@ -119,6 +130,7 @@ extern "C" __attribute__((visibility("default")))
 void init(const uint8_t* data, size_t len) {
     puts("core init()");
     cleanup();
+    memset(&key_state_, sizeof key_state_, 0);
 
     ring_init(&ring_);
 
