@@ -193,18 +193,22 @@ long apu_sample_variable(int16_t *output, int32_t frames) {
     return received;
 }
 
-// Returns bytes saved, and writes to dest. 
+// Returns bytes saved, and writes to dest.
 // Dest may be null to calculate size only. returns < 0 on error.
 extern "C" __attribute__((visibility("default")))
 int save_str(uint8_t* dest, int capacity) {
     REQUIRE_SYSTEM(0);
-    return 0; // FIXME
+    auto state = emulator->serialize();
+    if (dest == NULL) return state.size();
+    memcpy(dest, state.data(), state.size());
+    return state.size();
 }
 
 extern "C" __attribute__((visibility("default")))
 void load_str(int len, const uint8_t* src) {
     REQUIRE_SYSTEM();
-    // FIXME
+    serializer s(src, len);
+    emulator->unserialize(s);
 }
 
 #ifndef __wasm32__
