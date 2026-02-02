@@ -12,17 +12,43 @@
 #include <assert.h>
 #endif
 
-// SNES video dimensions (512 width for hi-res, 478 height for PAL support)
-#define VIDEO_WIDTH 512
-#define VIDEO_HEIGHT 478
+//=============================================================================
+// bsnes integration
+//=============================================================================
 
-// Stub emulator state - will be connected to bsnes later
-static void* current_system = NULL;
+// Forward declaration
+static void video_cb_impl(const void* data, unsigned width, unsigned height, size_t pitch);
 
-#define REQUIRE_SYSTEM(val) if (!current_system) { printf("Skipping %s\n", __func__); return val; }
+// Callbacks that program.cpp expects (normally provided by libretro.cpp)
+static void video_cb(const void* data, unsigned width, unsigned height, size_t pitch) {
+    video_cb_impl(data, width, height, pitch);
+}
+
+static void audio_queue(int16_t left, int16_t right) {
+    // TODO: push to ring buffer
+}
+
+static int16_t input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
+    // TODO: implement input
+    return 0;
+}
+
+static bool environ_cb(unsigned cmd, void* data) {
+    return false;
+}
+
+// Include libretro header for constants used by program.cpp
+#include "bsnes/bsnes/target-libretro/libretro.h"
+
+// Include bsnes program implementation
+// (defines: emulator, program, Program class, and all bsnes headers)
+#include "bsnes/bsnes/target-libretro/program.cpp"
+
+#define REQUIRE_SYSTEM(val) if (!program) { printf("Skipping %s\n", __func__); return val; }
 
 #define puts(arg) emu_puts_cb(arg)
 static void (*emu_puts_cb)(const char *) = NULL;
+extern "C" __attribute__((visibility("default")))
 void corelib_set_puts(void (*cb)(const char *)) {
     emu_puts_cb = cb;
 }
@@ -32,21 +58,19 @@ uint8_t is_pal = 0;
 
 struct ring_i16 ring_;
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 int width() {
-    return 320;
+    return 512;
 }
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 int height() {
-    return is_pal ? 224 : 240;
+    return is_pal ? 239 : 224;
 }
 
-__attribute__((visibility("default")))
-int framerate() { 
-    // FIXME
-    // 59.922751 ntsc,
-    // 49.701459 pal
+extern "C" __attribute__((visibility("default")))
+int framerate() {
+    // 59.922751 ntsc, 49.701459 pal
     return is_pal ? 50 : 60;
 }
 
@@ -55,27 +79,89 @@ int framerate() {
 __attribute__((visibility("default")))
 uint32_t fbuffer_[VIDEO_WIDTH * VIDEO_HEIGHT];
 
-__attribute__((visibility("default")))
-void set_key(size_t key, char val) {
-    REQUIRE_SYSTEM();
+// Video callback implementation - copies bsnes output to our framebuffer
+static void video_cb_impl(const void* data, unsigned width, unsigned height, size_t pitch) {
+    const uint32_t* src = (const uint32_t*)data;
+    size_t src_pitch = pitch / sizeof(uint32_t);
+
+    for (unsigned y = 0; y < height && y < VIDEO_HEIGHT; y++) {
+        for (unsigned x = 0; x < width && x < VIDEO_WIDTH; x++) {
+            fbuffer_[y * VIDEO_WIDTH + x] = src[y * src_pitch + x];
+        }
+    }
 }
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
+void set_key(size_t key, char val) {
+    REQUIRE_SYSTEM();
+    // TODO: map corelib keys to bsnes input
+}
+
+extern "C" __attribute__((visibility("default")))
 const uint8_t *framebuffer() {
     return (uint8_t*)fbuffer_;
 }
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 void frame() {
     REQUIRE_SYSTEM();
+    emulator->run();
 }
 
-__attribute__((visibility("default")))
+static void cleanup() {
+    if (program) {
+        program->save();
+        emulator->unload();
+        delete program;
+        program = nullptr;
+    }
+    if (emulator) {
+        delete emulator;
+        emulator = nullptr;
+    }
+}
+
+extern "C" __attribute__((visibility("default")))
 void init(const uint8_t* data, size_t len) {
+    // Clean up any previous instance
+    cleanup();
+
     ring_init(&ring_);
+
+    // Create emulator and program
+    emulator = new SuperFamicom::Interface;
+    program = new Program;
+
+    // Configure audio
+    emulator->configure("Audio/Frequency", SAMPLE_RATE);
+
+    // Set up video (no filtering)
+    program->filterRender = &Filter::None::render;
+    program->filterSize = &Filter::None::size;
+    program->updateVideoPalette();
+
+    // Load ROM from memory
+    if (!program->loadSuperFamicomFromMemory(data, len)) {
+        printf("Failed to load ROM\n");
+        cleanup();
+        return;
+    }
+
+    // Initialize emulator (calls emulator->load(), applies hacks, calls emulator->power())
+    program->load();
+
+    // Detect PAL/NTSC from ROM header
+    is_pal = (program->superFamicom.region == "PAL") ? 1 : 0;
+    printf("is_pal: %d\n", is_pal);
+
+    // Connect controllers
+    emulator->connect(SuperFamicom::ID::Port::Controller1, SuperFamicom::ID::Device::Gamepad);
+    emulator->connect(SuperFamicom::ID::Port::Controller2, SuperFamicom::ID::Device::Gamepad);
+
+    printf("bsnes initialized successfully\n");
 }
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 long apu_sample_variable(int16_t *output, int32_t frames) {
     REQUIRE_SYSTEM(0);
     size_t received = ring_pull(&ring_, output, frames);
@@ -91,13 +177,13 @@ long apu_sample_variable(int16_t *output, int32_t frames) {
 
 // Returns bytes saved, and writes to dest. 
 // Dest may be null to calculate size only. returns < 0 on error.
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 int save_str(uint8_t* dest, int capacity) {
     REQUIRE_SYSTEM(0);
     return 0; // FIXME
 }
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 void load_str(int len, const uint8_t* src) {
     REQUIRE_SYSTEM();
     // FIXME
@@ -106,7 +192,7 @@ void load_str(int len, const uint8_t* src) {
 #ifndef __wasm32__
 // file interface unavail for wasm
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 void save(int fd) {
     REQUIRE_SYSTEM();
     int est = save_str(NULL, 0);
@@ -128,7 +214,7 @@ void save(int fd) {
     free(buffer);
 }
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 void load(int fd) {
     REQUIRE_SYSTEM();
     off_t pos = lseek(fd, 0, SEEK_END);
@@ -155,7 +241,7 @@ void load(int fd) {
     free(buffer);
 }
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 void dump_state(const char* filename) {
     REQUIRE_SYSTEM();
     int fd = open(filename, O_CREAT | O_TRUNC | O_WRONLY , 0700);
@@ -168,7 +254,7 @@ void dump_state(const char* filename) {
     close(fd);
 }
 
-__attribute__((visibility("default")))
+extern "C" __attribute__((visibility("default")))
 void load_state(const char* filename) {
     REQUIRE_SYSTEM();
     int fd = open(filename,  O_RDONLY , 0700);

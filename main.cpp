@@ -109,7 +109,6 @@ const int BYTES_PER_PIXEL=4;
 const int SCALE = 2;
 int main(int argc, char **argv) {
   corelib_set_puts(emu_puts);
-  set_cachedir(".");
   sdlkeys = (uint8_t*)SDL_GetKeyboardState(0);
 
   char skipSave = 0;
@@ -123,23 +122,8 @@ int main(int argc, char **argv) {
   } else if (argc == 2) {
       // load rom only.
   } else if (argc == 3) {
-      if (strcmp(argv[2], "runc") == 0) {
-          // skipsave
-          skipSave = 1;
-      } else {
-        // take arg as bios path
-        const char *filename = argv[2];
-        printf("Taking  %s as bios path\n", filename);
-        const int CAP = 0x80000;
-        char* buffer = malloc(CAP);
-        size_t len = slurp(filename, buffer, CAP);
-        if (len == 0 || len != CAP) {
-            puts("Failed to load bios file.");
-            return 1;
-        }
-        copy_bios(buffer, len);
-        free(buffer);
-      }
+      // skipsave
+      skipSave = 1;
   }
 
   uint8_t *buffer = (uint8_t*)malloc(ROM_BUFFER_BYTES);
@@ -173,7 +157,7 @@ int main(int argc, char **argv) {
   clock_t start = clock();
   static_assert(CLOCKS_PER_SEC == 1000*1000, "Bad clock assumptions");
   char title[50];
-  int w=0,h=0;
+  int w=0,h=0, hz=0;
 
   SDL_Rect srcRect = {
       .x = 0,
@@ -186,10 +170,12 @@ int main(int argc, char **argv) {
       frame();
       int wp = width();
       int hp = height();
-      if (wp != w || hp != h) {
+      int fr = framerate();
+      if (wp != w || hp != h | hz != fr) {
           w = wp; 
           h = hp; 
-          snprintf(title, sizeof(title), "picostation - %d x %d", w, h);
+          hz = fr;
+          snprintf(title, sizeof(title), "picostation - %d x %d %d hz", w, h, hz);
           SDL_SetWindowTitle(window, title);
           SDL_SetWindowSize(window, w*SCALE, h*SCALE);
           srcRect.w = w;
@@ -205,8 +191,9 @@ int main(int argc, char **argv) {
       clock_t now = clock();
       // printf("now: %ld\n", now);
       // printf("frame speed: %f\n", 1000.0*1000 / (now - last));
-      size_t delta = 1000*1000 / framerate();
+      size_t delta = CLOCKS_PER_SEC / hz;
       ssize_t delay = (last + delta) - now;
+      printf("delay: %d\n", delay);
       if (delay > 0) {
           usleep(delay);
       } else {

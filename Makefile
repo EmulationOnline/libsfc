@@ -24,8 +24,8 @@ deps:
 	apt install -y clang
 	clang -v
 
-main: main.c corelib.h
-	$(CC) -O3 -o main main.c -L. -lsfc $(shell pkg-config --cflags --libs sdl2) -lc -lm ${WARN}
+main: main.cpp corelib.h
+	$(CC) -O3 -o main main.cpp -L. -lsfc $(shell pkg-config --cflags --libs sdl2) -lc -lm ${WARN}
 	echo "main done"
 
 clean:
