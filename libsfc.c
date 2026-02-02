@@ -12,24 +12,25 @@
 #include <assert.h>
 #endif
 
-//=============================================================================
-// bsnes integration
-//=============================================================================
+struct ring_i16 ring_;
+static unsigned width_, height_;
 
-// Forward declaration
 static void video_cb_impl(const void* data, unsigned width, unsigned height, size_t pitch);
 
-// Callbacks that program.cpp expects (normally provided by libretro.cpp)
+// hooks used by program.cpp
 static void video_cb(const void* data, unsigned width, unsigned height, size_t pitch) {
+    width_ = width;
+    height_ = height;
     video_cb_impl(data, width, height, pitch);
 }
 
 static void audio_queue(int16_t left, int16_t right) {
-    // TODO: push to ring buffer
+    int16_t mono = (left + right) / 2;
+    ring_push(&ring_, &mono, 1);
 }
 
 static int16_t input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
-    // TODO: implement input
+    // todo
     return 0;
 }
 
@@ -37,11 +38,8 @@ static bool environ_cb(unsigned cmd, void* data) {
     return false;
 }
 
-// Include libretro header for constants used by program.cpp
 #include "bsnes/bsnes/target-libretro/libretro.h"
 
-// Include bsnes program implementation
-// (defines: emulator, program, Program class, and all bsnes headers)
 #include "bsnes/bsnes/target-libretro/program.cpp"
 
 #define REQUIRE_SYSTEM(val) if (!program) { printf("Skipping %s\n", __func__); return val; }
@@ -53,19 +51,16 @@ void corelib_set_puts(void (*cb)(const char *)) {
     emu_puts_cb = cb;
 }
 
-// current_system is declared extern in blastem.h, defined in stubs.c
 uint8_t is_pal = 0;
-
-struct ring_i16 ring_;
 
 extern "C" __attribute__((visibility("default")))
 int width() {
-    return 512;
+    return width_;
 }
 
 extern "C" __attribute__((visibility("default")))
 int height() {
-    return is_pal ? 239 : 224;
+    return height_;
 }
 
 extern "C" __attribute__((visibility("default")))
@@ -73,8 +68,6 @@ int framerate() {
     // 59.922751 ntsc, 49.701459 pal
     return is_pal ? 50 : 60;
 }
-
-
 
 __attribute__((visibility("default")))
 uint32_t fbuffer_[VIDEO_WIDTH * VIDEO_HEIGHT];
@@ -109,6 +102,7 @@ void frame() {
 }
 
 static void cleanup() {
+    puts("cleanup");
     if (program) {
         program->save();
         emulator->unload();
@@ -123,7 +117,7 @@ static void cleanup() {
 
 extern "C" __attribute__((visibility("default")))
 void init(const uint8_t* data, size_t len) {
-    // Clean up any previous instance
+    puts("core init()");
     cleanup();
 
     ring_init(&ring_);
@@ -147,7 +141,6 @@ void init(const uint8_t* data, size_t len) {
         return;
     }
 
-    // Initialize emulator (calls emulator->load(), applies hacks, calls emulator->power())
     program->load();
 
     // Detect PAL/NTSC from ROM header
@@ -155,10 +148,10 @@ void init(const uint8_t* data, size_t len) {
     printf("is_pal: %d\n", is_pal);
 
     // Connect controllers
-    emulator->connect(SuperFamicom::ID::Port::Controller1, SuperFamicom::ID::Device::Gamepad);
-    emulator->connect(SuperFamicom::ID::Port::Controller2, SuperFamicom::ID::Device::Gamepad);
+    emulator->connect(SuperFamicom::ID::Port::Controller1, 
+            SuperFamicom::ID::Device::Gamepad);
 
-    printf("bsnes initialized successfully\n");
+    puts("core initialized successfully");
 }
 
 extern "C" __attribute__((visibility("default")))

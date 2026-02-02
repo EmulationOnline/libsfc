@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
 
   SDL_Init(SDL_INIT_VIDEO);
   SDL_Window *window = 
-      SDL_CreateWindow("pico station", 0, 0, VIDEO_WIDTH*SCALE, VIDEO_HEIGHT*SCALE, SDL_WINDOW_SHOWN);
+      SDL_CreateWindow("pico 16", 0, 0, VIDEO_WIDTH*SCALE, VIDEO_HEIGHT*SCALE, SDL_WINDOW_SHOWN);
   SDL_Renderer *renderer = SDL_CreateRenderer(
       window, -1,
       SDL_RENDERER_ACCELERATED);
@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
   auto get_time_us = []() -> uint64_t {
       struct timespec ts;
       clock_gettime(CLOCK_MONOTONIC, &ts);
-      return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+      return (uint64_t)ts.tv_sec * 1000*1000 + ts.tv_nsec / 1000;
   };
   uint64_t last = get_time_us();
   char title[50];
@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
           w = wp; 
           h = hp; 
           hz = fr;
-          snprintf(title, sizeof(title), "picostation - %d x %d %d hz", w, h, hz);
+          snprintf(title, sizeof(title), "pico16 - %d x %d %d hz", w, h, hz);
           SDL_SetWindowTitle(window, title);
           SDL_SetWindowSize(window, w*SCALE, h*SCALE);
           srcRect.w = w;
@@ -188,18 +188,14 @@ int main(int argc, char **argv) {
       SDL_UpdateTexture(texture, 0, framebuffer(), VIDEO_WIDTH*BYTES_PER_PIXEL);
       SDL_RenderCopy(renderer, texture, &srcRect, 0);
       SDL_RenderPresent(renderer);
-      // soundcard_queue(&soundcard, audio_buffer, audio_bytes);
-      // SDL_UpdateTexture(texture, 0, finished_frame + 2048, 512);
-      // SDL_RenderCopy(renderer, texture, 0, 0);
-      // SDL_RenderPresent(renderer);
       uint64_t now = get_time_us();
-      uint64_t delta = 1000000 / hz;  // microseconds per frame
+      uint64_t delta = 1000*1000 / hz;
       int64_t delay = (last + delta) - now;
       // printf("delay: %ld us\n", delay);
       if (delay > 0) {
           usleep(delay);
       } else {
-          // puts("lagging");
+          puts("lagging");
       }
       last = now;
   }
