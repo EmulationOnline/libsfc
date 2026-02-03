@@ -18,6 +18,15 @@ deps:
 	apt install -y clang
 	clang -v
 
+
+override LDFLAGS = -ldl
+ifneq (,$(findstring android,$(CXX)))
+  OPENMP := false
+else
+  OPENMP := true
+  override LDFLAGS += -lgomp
+endif
+
 main: main.cpp corelib.h
 	$(CC) -O3 -o main main.cpp -L. -lsfc $(shell pkg-config --cflags --libs sdl2) -lc -lm ${WARN}
 	echo "main done"
@@ -41,9 +50,10 @@ wrepl:
 BSNES_DIR=bsnes/bsnes
 BSNES_OBJS=$(wildcard $(BSNES_DIR)/obj/*.o)
 
-# Build bsnes object files first (reuses target-libretro build)
+# Build bsnes object files first (without linking bsnes_libretro.so)
+# bsnes uses 'compiler' variable, not CXX
 bsnes-objs:
-	$(MAKE) -C $(BSNES_DIR) target=libretro
+	$(MAKE) -C $(BSNES_DIR) target=libretro objects-only compiler=$(CXX) openmp=$(OPENMP)
 
 # Build libsfc.so using bsnes core
 libsfc.so: bsnes-objs libsfc.c corelib.h
@@ -51,7 +61,7 @@ libsfc.so: bsnes-objs libsfc.c corelib.h
 		$(filter-out $(BSNES_DIR)/obj/libretro.o, $(wildcard $(BSNES_DIR)/obj/*.o)) \
 		-I$(BSNES_DIR) -I$(BSNES_DIR)/.. \
 		-O3 -DBUILD_PERFORMANCE \
-		-lgomp -lpthread -ldl -lX11 -lXext \
+		$(LDFLAGS) \
 		-Wl,--no-undefined
 	cp libsfc.so libapu.so
 	@echo "libsfc.so (bsnes) done"
