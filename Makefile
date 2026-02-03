@@ -47,11 +47,11 @@ bsnes-objs:
 
 # Build libsfc.so using bsnes core
 libsfc.so: bsnes-objs libsfc.c corelib.h
-	$(CXX) -shared -fPIC -o libsfc.so libsfc.c \
+	$(CXX) -std=c++17 -shared -fPIC -o libsfc.so libsfc.c \
 		$(filter-out $(BSNES_DIR)/obj/libretro.o, $(wildcard $(BSNES_DIR)/obj/*.o)) \
 		-I$(BSNES_DIR) -I$(BSNES_DIR)/.. \
 		-O3 -DBUILD_PERFORMANCE \
-		-fopenmp -lpthread -ldl -lX11 -lXext \
+		-lgomp -lpthread -ldl -lX11 -lXext \
 		-Wl,--no-undefined
 	cp libsfc.so libapu.so
 	@echo "libsfc.so (bsnes) done"
