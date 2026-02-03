@@ -1,20 +1,14 @@
 # force core rebuild, while deps isn't working
 .PHONY: libsfc.so clean run runc repl ci deps
 
-ifeq ($(CC),cc)
-CC = clang
+ifeq ($(CXX),c++)
+CXX = clang++
 endif
 
 default: libsfc.so
 
 
 EMBEDFLAGS=-O3 -fvisibility=hidden -static -fPIC -lm
-COREFLAGS := --std=c2x -DHAVE_LOCALTIME_R -DPATH_MAX=4096 -Wfatal-errors -Werror -Wno-narrowing  -I msfc/include/ -I msfc/src/ 
-libsfc.so: libsfc.c corelib.h
-	echo "cc: $(CC)"
-	$(CC) $(CFLAGS) $(EMBEDFLAGS) $(COREFLAGS)  $(LDFLAGS) -shared -o libsfc.so libsfc.c $(SRCS)
-	cp libsfc.so libapu.so
-	echo "libsfc done"
 
 all: libsfc.so main
 
@@ -29,7 +23,8 @@ main: main.cpp corelib.h
 	echo "main done"
 
 clean:
-	rm -f libsfc.so main
+	rm -f libsfc.so libapu.so main
+	find . -name "*.o" -delete
 
 gdb:
 	LD_LIBRARY_PATH=$(shell pwd) gdb --args ./main "$(ROM)"
@@ -52,12 +47,13 @@ bsnes-objs:
 
 # Build libsfc.so using bsnes core
 libsfc.so: bsnes-objs libsfc.c corelib.h
-	g++ -shared -fPIC -o libsfc.so libsfc.c \
+	$(CXX) -shared -fPIC -o libsfc.so libsfc.c \
 		$(filter-out $(BSNES_DIR)/obj/libretro.o, $(wildcard $(BSNES_DIR)/obj/*.o)) \
 		-I$(BSNES_DIR) -I$(BSNES_DIR)/.. \
 		-O3 -DBUILD_PERFORMANCE \
 		-fopenmp -lpthread -ldl -lX11 -lXext \
 		-Wl,--no-undefined
+	cp libsfc.so libapu.so
 	@echo "libsfc.so (bsnes) done"
 
 EMCC=~/external/emscripten/em++
