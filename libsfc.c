@@ -127,6 +127,8 @@ void frame() {
 
 static void cleanup() {
     puts("cleanup");
+    // Don't set globals to nullptr until after cleanup operations,
+    // as save()/unload() may access them internally
     if (program) {
         program->save();
         emulator->unload();
@@ -134,7 +136,6 @@ static void cleanup() {
         program = nullptr;
     }
     if (emulator) {
-        delete emulator;
         emulator = nullptr;
     }
 }
